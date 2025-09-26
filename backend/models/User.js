@@ -39,6 +39,11 @@ const userSchema = new mongoose.Schema(
         isLoggined : {
             type:Boolean,
             default:false
+        },
+
+        loginAttempts:{
+            type:Number,
+            default:0
         }
     },
         {
