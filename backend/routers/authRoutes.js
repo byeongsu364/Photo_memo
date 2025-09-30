@@ -3,6 +3,7 @@ const router = express.Router()
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcrypt")
 const User = require("../models/User")
+const auth = require("../middlewares/auth")
 
 function makeToken(user) {
     return jwt.sign(
@@ -57,96 +58,152 @@ router.post("/register", async (req, res) => {
     }
 })
 
+const LOCK_MAX = 5
 router.post("/login", async (req, res) => {
     try {
         // 1) req.body에서 email, password를 꺼낸다(기본값은 빈 문자열).
         const { email, password } = req.body
 
-        // 2) 이메일을 소문자로 바꿔 활성화된 유저만 조회
-        const user = await User.findOne({ email: email.toLowerCase(), isActive: true })
+        //  2) 이메일을 소문자로 바꿔 활성화된 유저(isActive: true)만 조회한다. .findOne() /.toLowerCase()
+        const user = await User.findOne({
+            email: email.toLowerCase(),
+            isActive: true
+        })
 
+
+        const invalidMsg = { message: "이메일 또는 비밀번호가 올바르지 않습니다." };
+
+
+        // 3 사용자 없음
         if (!user) {
-            return res.status(200).json({ message: "이메일이 올바르지 않습니다." })
-        }
-
-        // 3) 비밀번호 확인
-        const ok = await user.comparePassword(password)
-        if (!ok) {
-            user.loginAttempts += 1
-
-            if (user.loginAttempts >= 5) {
-                user.isActive = false
-                await user.save()
-                return res.status(403).json({ message: "비밀번호 5회 이상 틀려 계정이 비활성화되었습니다." })
-            }
-
-            await user.save()
             return res.status(400).json({
-                message: `비밀번호가 올바르지 않습니다. (${user.loginAttempts}회 실패, 5회 초과 시 계정 잠금)`
+                ...invalidMsg,
+                loginAttempts: null,
+                remainingAttempts: null,
+                locked: false
             })
         }
 
+        // 4)비밀번호 검증 (User 모델에 comparePassword 메서드가 있다고 가정)
+        const ok = await user.comparePassword(password)
+
+        // 5)비밀번호 불일치
+        if (!ok) {
+            user.loginAttempts += 1
+
+            const remaining = Math.max(0, LOCK_MAX - user.loginAttempts)
+
+            // 5-1 실패 누적 임계치 이상 일때 계정 잠금
+            if (user.loginAttempts >= LOCK_MAX) {
+                user.isActive = false//잠금처리
+
+                await user.save()
+
+                return res.status(423).json({
+                    message: "유효성 검증 실패로 계정이 잠겼습니다. 관리자에게 문의하세요.",
+                    loginAttempts: user.loginAttempts,
+                    remainingAttempts: 0,
+                    locked: true
+                })
+            }
+            // 5-2 아직 잠금 전 400 현재 실패 남은 횟수 안내
+            await user.save()
+            return res.status(400).json({
+                ...invalidMsg,
+                loginAttempts: user.loginAttempts,
+                remainingAttempts: remaining,
+                locked: false
+            })
+        }
+
+
+        // 6 로그인 성공: 실패 카운트 초기화 접속 정보 업데이트
+
         user.loginAttempts = 0
+        user.isLoggined = true
         user.lastLoginAt = new Date()
+
         await user.save()
 
-        // 4) 로그인 성공 시 DB 업데이트
-        const updated = await User.findByIdAndUpdate(
-            user._id,
-            {
-                $set: {
-                    isLoggined: true
-                }
-            },
-            { new: true }
-        )
+        // 7 JWT 발급 및 쿠키 설정
+        const token = makeToken(user)
 
-        if (!updated) return res.status(200).json({ message: "로그인 상태 갱신 실패" })
-
-        // 5) JWT 토큰 발급
-        const token = makeToken(updated)
 
         res.cookie('token', token, {
-            httpOnly: true, //보안 강화
+            httpOnly: true,
             sameSite: "lax",
-            secure: "production", //https 환경
-            maxAge: 7 * 24 * 60 * 1000 //7일
+            secure: "production",
+            maxAge: 7 * 24 * 60 * 60 * 1000
         })
 
+
+        // 8 성공 응답: 사용자 정보 +토큰+ 참조용 카운트 
         return res.status(200).json({
-            user: updated.toSafeJSON(),
-            token
+            user: user.toSafeJSON(),
+            token,
+            loginAttempts: 0,
+            remainingAttempts: LOCK_MAX,
+            locked: false
         })
 
     } catch (error) {
-        console.error(err)
-        res.status(500).json({
+        return res.status(500).json({
             message: "로그인 실패",
             error: error.message
         })
     }
 })
 
+router.use(auth)
+
 router.get("/me", async (req, res) => {
     try {
-        const h = req.headers.authorization || ""
+        const me = await User.findById(req.user._id)
+        if (!me) return res.status(404).json({ message: "사용자 없음" })
 
-        const token = h.startsWith("Bearer") ? h.slice(7) : null
-
-        if (!token) return res.status(401).json({ message: "인증 필요" })
-
-        const payload = jwt.verify(token, process.env.JWT_SECRET)
-
-        const user = await User.findById(payload.id)
-
-        if (!user) return res.status(404).json({ message: "사용자 없음" })
-
-        res.status(200).json(user.toSafeJSON())
+        return res.status(200).json(me.toSafeJSON())
 
     } catch (error) {
-        res.status(401).json({ message: "토큰 무효", error: error.message })
+        res.status(401).json({ message: "조회 실패", error: error.message })
     }
 })
 
+router.get("/users", async (req, res) => {
+    try {
+        const me = await User.findById(req.user._id)
+        if (!me) return res.status(404).json({ message: "사용자 없음" })
+
+        if (me.role !== 'admin') {
+            return res.status(403).json({ message: "권한 없음" })
+        }
+        const users = await User.find().select('-passwordHash')
+
+        return res.status(200).json({ users })
+    } catch (error) {
+        res.status(401).json({ message: "조회 실패", error: error.message })
+    }
+})
+
+router.post("/logout", async (req, res) => {
+    try {
+        await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: { isLoggined: false }, },
+            { new: true }
+        )
+
+        res.clearCookie('token', {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: "production"
+        })
+
+        return res.status(200).json({ message: "로그아웃 성공" })
+
+    } catch (error) {
+        return res.status(500).json({ message: "로그아웃 실패", error: error.message })
+
+    }
+})
 
 module.exports = router
