@@ -205,3 +205,23 @@ pre {
 code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 }
+
+/* =========================
+   Layout Utils
+========================= */
+.container {
+    max-width: 96rem;
+    margin: 0 auto;
+    padding: 0 1.6rem;
+
+}
+
+.container-sm {
+    min-width: 60rem;
+    padding: 2rem;
+
+    @media screen and (max-width:600px) {
+        min-width: auto;
+
+    }
+}
