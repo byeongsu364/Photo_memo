@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import './styles/AuthPanel.scss'
 import AuthModal from "./AuthModal"
+
 const AuthPanel = ({
     isAuthed,
     user,
@@ -12,18 +13,20 @@ const AuthPanel = ({
 }) => {
 
     const [open, setOpen] = useState(false)
-
     const hasRequiredRole = !requiredRole || (user && user.role == requiredRole)
+
+
 
     if (open) {
         return (
             <AuthModal
-            open={open}
-            onClose={() => setOpen(false)}
-            onAuthed={onAuthed}
-        />
+                open={open}
+                onClose={() => setOpen(false)}
+                onAuthed={onAuthed}
+            />
         )
     }
+
 
     return (
         <section className='container-sm admin-card'>
@@ -47,7 +50,8 @@ const AuthPanel = ({
                 <div className="auth-row">
                     {/* 로그인 후 */}
                     <span>안녕하세요 <b>{user?.displayName || user?.email}</b> </span>
-                    <span className={`badge ${hasRequiredRole ? 'badge-ok' : 'badge-warn'} `}>
+                    <span
+                        className={`badge ${hasRequiredRole ? 'badge-ok' : 'badge-warn'} `}>
                         {hasRequiredRole ? 'admin' : `권한없음 : ${requiredRole} 필요`}
                     </span>
 
@@ -60,6 +64,8 @@ const AuthPanel = ({
                     </div>
                 </div>
             )}
+
+
 
             {/* 권한 없음 경고 */}
             {!hasRequiredRole && (
@@ -75,7 +81,7 @@ const AuthPanel = ({
                 </pre>
             )}
 
-        </section >
+        </section>
     )
 }
 

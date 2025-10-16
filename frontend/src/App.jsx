@@ -21,7 +21,6 @@ function App() {
 
   const isAuthed = !!token
 
-
   const HandleAuthed = ({ user, token }) => {
     setUser(user)
     setToken(token)
