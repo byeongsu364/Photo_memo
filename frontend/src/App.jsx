@@ -3,7 +3,16 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from "react-router-dom"
 import AuthPanel from "./components/AuthPanel"
 import Landing from "./pages/Landing"
-import api from "./api/client"
+import Header from './components/Header'
+import ProtectRouter from './components/ProtectRouter'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import UserDashboard from './pages/user/UserDashboard'
+import {
+  fetchMe as apifetchMe,
+  logout as apilogout,
+  saveAuthToStorage,
+  clearAuthStorage
+} from "./api/client"
 
 function App() {
 
@@ -13,6 +22,9 @@ function App() {
     return raw ? JSON.parse(raw) : null
   })
 
+  const hideOn = new Set(['/','/admin/login'])
+  const showHeader = isAuthed && !hideOn.has(location.pathname)
+
   const [token, setToken] = useState(() => {
     localStorage.getItem('token')
   })
@@ -21,49 +33,96 @@ function App() {
 
   const isAuthed = !!token
 
-  const HandleAuthed = ({ user, token }) => {
-    setUser(user)
-    setToken(token)
-
-    localStorage.setItem('user', JSON.stringify(user))
-    localStorage.setItem('token', token)
-  }
-
-  const logout = () => {
-    setUser(null)
-    setToken(null)
-    setMe(null)
-
-    localStorage.removeItem('user')
-    localStorage.removeItem('token')
-  }
-
-  const fetchMe = async () => {
+  const HandleAuthed = async ({ user, token }) => {
     try {
-      const { data } = await api.get('/api/auth/me')
-      setMe(data)
+      setUser(user)
+      setToken(token ?? null)
+      saveAuthToStorage({ user, token })
+      handleFetchMe()
     } catch (error) {
-      setMe({ error: error.response?.data || '실패' })
+      console.error(error)
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      await apilogout()
+    } catch (error) {
+
+    } finally {
+      setUser(null)
+      setToken(null)
+      setMe(null)
+      clearAuthStorage()
+    }
+  }
+
+  const handleFetchMe = async () => {
+    try {
+      const { user } = await apifetchMe()
+      setMe(user)
+    } catch (error) {
+      setMe({ error: '내정보 조회 실패' })
+      console.error(error)
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthed) handleFetchMe()
+  }, [isAuthed])
+
   return (
     <div className="page">
+      {showHeader && <Header
+      isAuthed={isAuthed}
+      user={user}
+      onLogout={handleLogout}
+      />}
+
       <Routes>
         <Route path="/" element={<Landing />} />
+        {/*로그인 회원가입 */}
         <Route
           path="/admin/login"
           element={<AuthPanel
-            isAuthed = {isAuthed}
-            user = {user}
-            me = {me}
-            onFetchMe = {fetchMe}
-            onLogout = {logout}
-            onAuthed = {HandleAuthed}
-            requiredRole = "admin"
+            isAuthed={isAuthed}
+            user={user}
+            me={me}
+            onFetchMe={handleFetchMe}
+            onLogout={handleLogout}
+            onAuthed={HandleAuthed}
+            requiredRole="admin"
           />}
         />
-        <Route path='*' element={<Navigate to="/" replace />}/>
+        {/*사용자 보호구역*/}
+        <Route
+          path='/user'
+          element={
+            <ProtectRouter 
+              user={user}
+              isAuthed={isAuthed}
+              redirect='/admin/login'
+            />
+          }
+        >
+          <Route index element={<Navigate to="/user/dashboard" replace/>}/>
+          <Route path='dashboard' element={<UserDashboard />}/>
+        </Route>
+                {/* 관리자 보호구역 */}
+        <Route
+          path='/admin'
+          element={
+            <ProtectRoute
+              isAuthed={isAuthed}
+              user={user}
+              requiredRole="admin"
+            />
+          }
+        >
+          <Route index element={<Navigate to="/admin/dashboard" replace/>}/>
+          <Route path='dashboard' element={<AdminDashboard/>}/>
+        </Route>
+        <Route path='*' element={<Navigate to="/" replace />} />
       </Routes>
     </div>
   )
