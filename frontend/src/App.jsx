@@ -22,17 +22,17 @@ function App() {
     return raw ? JSON.parse(raw) : null
   })
 
-  const hideOn = new Set(['/','/admin/login'])
-  const showHeader = isAuthed && !hideOn.has(location.pathname)
-
   const [token, setToken] = useState(() => {
     localStorage.getItem('token')
   })
-
+  
   const [me, setMe] = useState(null)
-
+  
   const isAuthed = !!token
-
+  
+  const hideOn = new Set(['/','/admin/login'])
+  const showHeader = isAuthed && !hideOn.has(location.pathname)
+  
   const HandleAuthed = async ({ user, token }) => {
     try {
       setUser(user)
