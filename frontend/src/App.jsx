@@ -4,7 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom"
 import AuthPanel from "./components/AuthPanel"
 import Landing from "./pages/Landing"
 import Header from './components/Header'
-import ProtectRouter from './components/ProtectRouter'
+import ProtectRoute from './components/ProtectRoute'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserDashboard from './pages/user/UserDashboard'
 import {
@@ -98,7 +98,7 @@ function App() {
         <Route
           path='/user'
           element={
-            <ProtectRouter 
+            <ProtectRoute
               user={user}
               isAuthed={isAuthed}
               redirect='/admin/login'
