@@ -1,5 +1,6 @@
 import React from 'react'
 import { useNavigate, NavLink, Link } from 'react-router-dom'
+import "./styles/Header.scss"
 
 const Header = ({
     isAuthed,
@@ -25,15 +26,13 @@ const Header = ({
                     📷Photomemo
                 </h1>
                 <div className="auth-area">
-                    {isAuthed ? (
+                    {isAuthed && (
                         <div>
                             <span className='welcome'>
                                 {user?.displayName || user?.email || "user"}
                             </span>
                             <button className='btn logout' onClick={handleLogout}>로그아웃</button>
                         </div>
-                    ) : (
-                        <Link className='btn login' to='/admin/login'></Link>
                     )}
                 </div>
             </div>
