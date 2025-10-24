@@ -1,10 +1,16 @@
 const mongoose = require('mongoose')
 
+
 const postSchema = new mongoose.Schema(
     {
+        user:{
+            type:mongoose.Schema.Types.ObjectId,
+            ref:'User',
+            required:true
+        },
         number :{
             type:Number,
-            required:true
+            required:true,
         },
         title :{
             type:String,
@@ -16,7 +22,7 @@ const postSchema = new mongoose.Schema(
             required:true,
             trim:true
         },
-        fileUrl :{
+        fileUrl:{
             type:[String],
             trim:true
         },
@@ -44,6 +50,6 @@ const postSchema = new mongoose.Schema(
     }
 )
 
-const Post = mongoose.model("Post", postSchema)
+const Post = mongoose.model("Post",postSchema)
 
-module.exports = Post
+module.exports=Post

@@ -101,7 +101,7 @@ function App() {
             <ProtectRoute
               user={user}
               isAuthed={isAuthed}
-              redirect='/admin/login'
+              redirect='/'
             />
           }
         >
