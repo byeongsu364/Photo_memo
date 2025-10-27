@@ -3,7 +3,8 @@ const router = express.Router()
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcrypt")
 const User = require("../models/User")
-const auth = require("../middlewares/auth")
+const { authenticateToken } = require('../middlewares/auth'); // ✅ 변경됨: auth → authenticateToken 명시적 미들웨어 사용
+
 
 function makeToken(user) {
     return jwt.sign(
@@ -12,11 +13,12 @@ function makeToken(user) {
             role: user.role,
             email: user.email
         },
-
         process.env.JWT_SECRET,
         {
-            expiresIn: "7d"
+            expiresIn: "7d",
+            jwtid: `${user._id}-${Date.now()}`,
         }
+
     )
 }
 
@@ -31,9 +33,9 @@ router.post("/register", async (req, res) => {
         const exists = await User.findOne({
             email: email.toLowerCase()
         })
-
         if (exists) {
-            return res.status(400).json({ message: "이미 가입된 이메일 입니다." })
+
+            return res.status(400).json({ message: "이미 가입된 이메일" })
         }
 
         const passwordHash = await bcrypt.hash(password, 10)
@@ -52,9 +54,10 @@ router.post("/register", async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({
-            message: "회원가입 실패..",
+            message: "회원가입 실패",
             error: error.message
         })
+
     }
 })
 
@@ -132,7 +135,8 @@ router.post("/login", async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true,
             sameSite: "lax",
-            secure: "production",
+            secure: process.env.NODE_ENV === "production",
+            path: "/",
             maxAge: 7 * 24 * 60 * 60 * 1000
         })
 
@@ -154,33 +158,38 @@ router.post("/login", async (req, res) => {
     }
 })
 
-router.use(auth)
+router.use(authenticateToken)
+
 
 router.get("/me", async (req, res) => {
     try {
-        const me = await User.findById(req.user._id)
+        const me = await User.findById(req.user.id)
+
         if (!me) return res.status(404).json({ message: "사용자 없음" })
 
         return res.status(200).json(me.toSafeJSON())
 
     } catch (error) {
+
         res.status(401).json({ message: "조회 실패", error: error.message })
     }
 })
 
 router.get("/users", async (req, res) => {
     try {
-        const me = await User.findById(req.user._id)
-        if (!me) return res.status(404).json({ message: "사용자 없음" })
+        const me = await User.findById(req.user.id)
+        if (!me) return res.status(404).json({ message: '사용자 없음' })
+
 
         if (me.role !== 'admin') {
-            return res.status(403).json({ message: "권한 없음" })
+            return res.status(403).json({ message: '권한 없음' })
         }
         const users = await User.find().select('-passwordHash')
 
         return res.status(200).json({ users })
     } catch (error) {
         res.status(401).json({ message: "조회 실패", error: error.message })
+
     }
 })
 
@@ -195,14 +204,13 @@ router.post("/logout", async (req, res) => {
         res.clearCookie('token', {
             httpOnly: true,
             sameSite: "lax",
-            secure: "production"
+            secure: process.env.NODE_ENV === "production",
+            path:'/'
         })
-
-        return res.status(200).json({ message: "로그아웃 성공" })
-
+        return res.status(200).json({ message: '로그아웃 성공' })
     } catch (error) {
-        return res.status(500).json({ message: "로그아웃 실패", error: error.message })
 
+        return res.status(500).json({ message: '로그아웃 실패', error: error.message })
     }
 })
 

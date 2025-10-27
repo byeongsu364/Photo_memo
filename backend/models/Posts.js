@@ -1,4 +1,4 @@
-const mongoose = require('mongoose')
+const mongoose =require('mongoose')
 
 
 const postSchema = new mongoose.Schema(
@@ -10,7 +10,7 @@ const postSchema = new mongoose.Schema(
         },
         number :{
             type:Number,
-            required:true,
+            required:true
         },
         title :{
             type:String,
@@ -44,12 +44,14 @@ const postSchema = new mongoose.Schema(
             type:Date,
             default:Date.now
         }
+
     },
     {
         timestamps:true
     }
 )
+postSchema.index({ user: 1, number: 1 }, { unique: true });
 
 const Post = mongoose.model("Post",postSchema)
 
-module.exports=Post
+module.exports= Post

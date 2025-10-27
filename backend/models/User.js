@@ -1,66 +1,62 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const userSchema = new mongoose.Schema(
+const userSchema=new mongoose.Schema(
     {
-        email : {
+        email:{
             type:String,
             required:true,
             lowercase:true,
             trim:true,
-            match:[EMAIL_REGEX, "유효한 이메일"]
+            match:[EMAIL_REGEX,"유효한 이메일"]
         },
-
-        passwordHash : {
+        passwordHash:{
             type:String,
             required:true
         },
-
-        displayName : {
+        displayName:{
             type:String,
             trim:true,
             default:""
         },
-
-        role : {
+        role:{
             type:String,
-            enum:["user", "admin"],
+            enum:["user","admin"],
             default:"user",
             index:true
         },
-
-        isActive : {
+        isActive:{
             type:Boolean,
             default:true
         },
-
-        isLoggined : {
+        isLoggined:{
             type:Boolean,
             default:false
         },
-
         loginAttempts:{
             type:Number,
             default:0
         }
     },
-        {
-            timestamps:true
-        }
+    {
+        timestamps:true
+    }
 )
 
-userSchema.methods.comparePassword = function(plain) {
-    return bcrypt.compare(plain, this.passwordHash)
+userSchema.methods.comparePassword=function(plain){
+    return bcrypt.compare(plain,this.passwordHash)
 }
 
-userSchema.methods.toSafeJSON = function() {
-    const obj = this.toObject({versionKey:false})
+
+
+userSchema.methods.toSafeJSON=function(){
+    const obj =this.toObject({versionKey:false})
     delete obj.passwordHash
     return obj
 }
+userSchema.index({email:1},{unique:true})
 
-userSchema.index({email:1}, {unique:true})
-
-module.exports = mongoose.model('User', userSchema)
+module.exports = mongoose.model('User',userSchema)
