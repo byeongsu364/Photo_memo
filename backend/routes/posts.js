@@ -4,10 +4,20 @@ const Post = require('../models/Posts')
 const jwt = require('jsonwebtoken')
 const mongoose = require('mongoose')
 const { authenticateToken } = require('../middlewares/auth');
+const { deleteObject } = require('../src/s3')
 
 const S3_BASE_URL =
     process.env.S3_BASE_URL ||
     `https://${process.env.S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com`; // 추가됨
+
+
+function urlToKey(u) {
+    if (!u) return ''
+    const s = String(u)
+    if (!/^https?:\/\//i.test(s)) return s // 이미 key
+    const base = String(S3_BASE_URL || '').replace(/\/+$/, '')
+    return s.startsWith(base + '/') ? s.slice(base.length + 1) : s
+}
 
 
 function joinS3Url(base, key) {                       // 추가됨
@@ -147,24 +157,67 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 })
 /** UPDATE */
-router.put('/:id', authenticateToken, ensureObjectId, async (req, res) => { // 변경됨: ensureObjectId 추가
+router.put("/:id", authenticateToken, ensureObjectId, async (req, res) => {
+    // 변경됨: ensureObjectId 추가
     try {
         const { title, content, fileUrl, imageUrl } = req.body;
+
+        const before = await Post.findById(req.params.id)
+            .select("user fileUrl imageUrl")
+            .lean();
+
+        if (!before)
+            return res.status(404).json({ message: "존재하지 않는 게시글" });
+
+        const uid = String(req.user.id || req.user._id); // 추가됨
+        if (String(doc.user) !== uid) {
+            return res.status(403).json({ message: "권한이 없습니다." }); // 추가됨
+        }
 
         // 변경됨: undefined 필드로 기존값 덮어쓰지 않도록 필터링
         const updates = pickDefined({
             title,
             content,
-            fileUrl: (fileUrl !== undefined) ? toArray(fileUrl) : undefined, // 변경됨: 안전 변환
-            imageUrl
+            fileUrl: fileUrl !== undefined ? toArray(fileUrl) : undefined, // 변경됨: 안전 변환
+            imageUrl,
         });
+        const oldKeys = [
+            ...(Array.isArray(before.fileUrl) ? before.fileUrl : []),
+            ...(before.imageUrl ? [before.imageUrl] : []),
+        ]
+            .map(urlToKey) // 절대경로 → S3 키 변환
+            .filter(Boolean);
 
-        // 추가됨: 소유권 검증(본인 글만 수정)
-        const doc = await Post.findById(req.params.id).select('user').lean(); // 추가됨
-        if (!doc) return res.status(404).json({ message: '존재하지 않는 게시글' });
-        const uid = String(req.user.id || req.user._id);                     // 추가됨
-        if (String(doc.user) !== uid) {
-            return res.status(403).json({ message: '권한이 없습니다.' });      // 추가됨
+        const newKeys = [
+            ...(updates.fileUrl !== undefined
+                ? updates.fileUrl // 새 fileUrl이 있을 경우
+                : Array.isArray(before.fileUrl)
+                    ? before.fileUrl // 없으면 기존 값 유지
+                    : []),
+            ...(updates.imageUrl !== undefined
+                ? [updates.imageUrl]
+                : before.imageUrl
+                    ? [before.imageUrl]
+                    : []),
+        ]
+            .map(urlToKey)
+            .filter(Boolean);
+
+        const toDelete = oldKeys.filter((k) => !newKeys.includes(k));
+
+        if (toDelete.length) {
+            const results = await Promise.allSettled(
+                toDelete.map((k) => deleteObject(k))
+            );
+
+            // ⚠️ 실패한 항목 로그 남기기 (전체 실패 방지는 아님)
+            const fail = results.filter((r) => r.status === "rejected");
+            if (fail.length) {
+                console.warn(
+                    "[S3 Delete Partial Fail]",
+                    fail.map((f) => f.reason?.message || f.reason)
+                );
+            }
         }
 
         const updated = await Post.findByIdAndUpdate(
@@ -175,30 +228,50 @@ router.put('/:id', authenticateToken, ensureObjectId, async (req, res) => { // �
 
         res.json(updated);
     } catch (error) {
-        console.error('PUT /api/posts/:id 실패', error);                     // 추가됨: 로깅 강화
-        res.status(500).json({ message: '서버 오류' });
+        console.error("PUT /api/posts/:id 실패", error); // 추가됨: 로깅 강화
+        res.status(500).json({ message: "서버 오류" });
     }
 });
 
-router.delete('/:id', authenticateToken, ensureObjectId, async (req, res) => {
+
+router.delete("/:id", authenticateToken, ensureObjectId, async (req, res) => {
     try {
         // 추가됨: 소유권 검증(본인 글만 삭제)
-        const doc = await Post.findById(req.params.id).select('user');       // 추가됨
-        if (!doc) return res.status(404).json({ message: '존재하지 않는 게시글' });
+        const doc = await Post.findById(req.params.id).select(
+            "user fileUrl imageUrl"
+        ); // 추가됨
+        if (!doc) return res.status(404).json({ message: "존재하지 않는 게시글" });
 
-        const uid = String(req.user.id || req.user._id);                     // 추가됨
+        const uid = String(req.user.id || req.user._id); // 추가됨
         if (String(doc.user) !== uid) {
-            return res.status(403).json({ message: '권한이 없습니다.' });      // 추가됨
+            return res.status(403).json({ message: "권한이 없습니다." }); // 추가됨
         }
 
-        await doc.deleteOne();                                               // 변경됨: 안전 삭제
+        const keys = [
+            ...(Array.isArray(doc.fileUrl) ? doc.fileUrl : []),
+            ...(doc.imageUrl ? [doc.imageUrl] : []),
+        ]
+            .map(urlToKey)
+            .filter(Boolean);
+
+        if (keys.length) {
+            const results = await Promise.allSettled(
+                keys.map((k) => deleteObject(k))
+            );
+            const fail = results.filter((r) => r.status === "rejected");
+            if (fail.length) {
+                console.warn(
+                    "[S3 Delete Partial Fail]",
+                    fail.map((f) => f.reason?.message || f.reason)
+                );
+            }
+        }
+        await doc.deleteOne(); // 변경됨: 안전 삭제
         res.json({ ok: true, id: doc._id });
-
     } catch (error) {
-        res.status(500).json({ message: '서버 오류' })
-
+        res.status(500).json({ message: "서버 오류" });
     }
-})
+});
 
 
 module.exports = router
