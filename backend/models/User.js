@@ -30,10 +30,10 @@ const userSchema=new mongoose.Schema(
             default:"user",
             index:true
         },
-        // isActive:{
-        //     type:Boolean,
-        //     default:true
-        // },
+        isActive:{
+            type:Boolean,
+            default:true
+        },
         lastLoginAttempt:{
             type:Date
         },
