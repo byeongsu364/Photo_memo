@@ -7,6 +7,10 @@ import Header from './components/Header'
 import ProtectRoute from './components/ProtectRoute'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserDashboard from './pages/user/UserDashboard'
+import AdminUsers from './pages/admin/AdminUsers'
+import AdminPosts from './pages/admin/AdminPosts'
+import AdminLayout from './components/admin/AdminLayout'
+import { Postprovider } from './context/PostContext'
 import {
   fetchMe as apifetchMe,
   logout as apilogout,
@@ -25,14 +29,14 @@ function App() {
   const [token, setToken] = useState(() => {
     localStorage.getItem('token')
   })
-  
+
   const [me, setMe] = useState(null)
-  
+
   const isAuthed = !!token
-  
-  const hideOn = new Set(['/','/admin/login'])
+
+  const hideOn = new Set(['/', '/admin/login'])
   const showHeader = isAuthed && !hideOn.has(location.pathname)
-  
+
   const HandleAuthed = async ({ user, token }) => {
     try {
       setUser(user)
@@ -74,9 +78,9 @@ function App() {
   return (
     <div className="page">
       {showHeader && <Header
-      isAuthed={isAuthed}
-      user={user}
-      onLogout={handleLogout}
+        isAuthed={isAuthed}
+        user={user}
+        onLogout={handleLogout}
       />}
 
       <Routes>
@@ -105,10 +109,10 @@ function App() {
             />
           }
         >
-          <Route index element={<Navigate to="/user/dashboard" replace/>}/>
-          <Route path='dashboard' element={<UserDashboard />}/>
+          <Route index element={<Navigate to="/user/dashboard" replace />} />
+          <Route path='dashboard' element={<UserDashboard />} />
         </Route>
-                {/* 관리자 보호구역 */}
+        {/* 관리자 보호구역 */}
         <Route
           path='/admin'
           element={
@@ -119,8 +123,12 @@ function App() {
             />
           }
         >
-          <Route index element={<Navigate to="/admin/dashboard" replace/>}/>
-          <Route path='dashboard' element={<AdminDashboard/>}/>
+          <Route element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path='dashboard' element={<AdminDashboard />} />
+            <Route path='posts' element={<AdminPosts />} />
+            <Route path='users' element={<AdminUsers />} />
+          </Route>
         </Route>
         <Route path='*' element={<Navigate to="/" replace />} />
       </Routes>
