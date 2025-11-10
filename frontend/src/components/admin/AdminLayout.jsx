@@ -1,5 +1,5 @@
 import React from 'react'
-import {Oultet} from 'react-router-dom'
+import { Outlet } from "react-router-dom"; // ✅ 올바른 표기
 import AdminNav from './AdminNav'
 
 const AdminLayout = () => {
@@ -7,7 +7,7 @@ const AdminLayout = () => {
     <div>
         <AdminNav />
         <main>
-            <Oultet />
+            <Outlet />
         </main>
     </div>
   )

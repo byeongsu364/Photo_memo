@@ -1,35 +1,56 @@
-import React, {useEffect, useState} from 'react'
-import { fetchAdminPosts, patchAdminPost } from '../../api/adminApi'
-import AdminFilter from '../../components/admin/AdminFilter'
-import AdminPostsList from '../../components/admin/AdminPostsList'
+import React, { useEffect, useMemo, useState, useCallback, use } from "react";
+import { fetchAdminPosts, patchAdminPost } from "../../api/adminApi";
+import AdminPostList from "../../components/admin/AdminPostsList";
+import AdminPostFilter from "../../components/admin/AdminFilter";
+import { getUserId } from "../../util/getUserId";
+import useAdminFiltered from "../../hooks/useAdminFiltered";
 
 const AdminPosts = () => {
-  const [list, setList] = useState([])
-  const [query, setQuery] = useState({
-    page:1,
-    size:10,
-    status:'',
-    q:'',
-    user:''
+  const [items, setItems] = useState([]);
+  const [filter, setFilter] = useState({ q: "", user: "", status: "" });
+
+  const getPosts=useCallback(async()=>{
+
+    const res = await fetchAdminPosts(); // 서버 필터 X, 전체 받아오기
+    setItems(res)
+
+  },[])
+
+  useEffect(() => {getPosts()}, [getPosts]);
+
+  const normalizedItems = useMemo(() => { 
+    ()=>items.map(it => ({...it, _userId: getUserId(it.user)}))
+  }, [items]);
+
+  const filteredItems = useAdminFiltered(normalizedItems, filter, {
+    q: "title",
+    user: "_userId",
+    status: "status",
   })
 
-  useEffect(()=> {
-    (async ()=> {
-      try {
-        const items = await fetchAdminPosts(query)
-        setList(items)
-      } catch (error) {
-        console.error('게시글 불러오기 실패',error)
-      }
-    })()
-  }, [query])
+  const handleApprove = async (id) => {
+    const updated = await patchAdminPost(id, { status: "approved" })
+
+    setItems(prev=>prev.map(it=>it._id===id ? updated : it))
+  }
+
+
+  const handleReject = async (id) => {
+    const updated = await patchAdminPost(id, { status: "rejected" })
+
+    setItems(prev=>prev.map(it=>it._id===id ? updated : it))
+  }
 
   return (
-    <div>
-        <AdminFilter />
-        <AdminPostsList items={list} />
+    <div className="inner">
+      <AdminPostFilter value={filter} onChange={setFilter} />
+      <AdminPostList 
+      items={filteredItems} 
+      onApprove={handleApprove}
+      onReject={handleReject}
+      />
     </div>
-  )
-}
+  );
+};
 
-export default AdminPosts
+export default AdminPosts;
