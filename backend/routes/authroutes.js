@@ -2,6 +2,7 @@ const express = require("express")
 const router = express.Router()
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcrypt")
+const passport = require("../config/passport")
 const User = require("../models/User")
 const { authenticateToken } = require('../middlewares/auth'); // ✅ 변경됨: auth → authenticateToken 명시적 미들웨어 사용
 
@@ -205,6 +206,31 @@ router.post("/login", async (req, res) => {
             error: error.message
         })
     }
+})
+
+router.get("/kakao", passport.authenticate("kakao"))
+
+router.get("/kakao/callback", (req, res, next) => {
+    passport.authenticate("kakao", { 
+        session: false,
+    },async(err, user, info)=> {
+        if(err){
+            console.error("Kakao error:",err)
+            return res.status(500).json({message:"카카오 인증 에러"})
+        }
+        
+        if(!user){
+            console.warn("카카오 로그인 실패", info)
+            return res.redirect(`${FRONT_ORIGIN}/admin/login?error=kakao`)
+
+        }
+        const token= makeToken(user)
+        const redirectUrl = `${FRONT_ORIGIN}/oauth/kakao?token=${token}`
+
+        console.log("kakao redirect", redirectUrl)
+        return res.redirect(redirectUrl)
+    })(req, res, next)
+
 })
 
 router.use(authenticateToken)

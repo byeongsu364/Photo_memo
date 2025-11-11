@@ -75,4 +75,5 @@ export function clearAuthStorage() {
     localStorage.removeItem("token")
 }
 
+export {BASE_URL}
 export default api

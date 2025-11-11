@@ -12,7 +12,10 @@ const userSchema=new mongoose.Schema(
             lowercase:true,
             trim:true,
             match:[EMAIL_REGEX,"유효한 이메일"],
-            unique:true
+            unique:true,
+            required:function(){
+                return !this.kakaoId
+            }
         },
         passwordHash:{
             type:String,
@@ -23,6 +26,18 @@ const userSchema=new mongoose.Schema(
             type:String,
             trim:true,
             default:""
+        },
+        provider:{
+            type:String,
+            enum:["local","kakao"],
+            default:"local",
+            index:true
+        },
+        kakaoId:{
+            type:String,
+            index:true,
+            unique:true,
+            sparse:true
         },
         role:{
             type:String,
@@ -51,7 +66,7 @@ userSchema.methods.comparePassword=function(plain){
     return bcrypt.compare(plain,this.passwordHash)
 }
 
-userSchema.method.setPassword= async function(plain){
+userSchema.methods.setPassword= async function(plain){
     const salt=await bcrypt.genSalt(10)
     this.passwordHash= await bcrypt.hash(plain,salt)
 }
